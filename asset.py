@@ -43,7 +43,7 @@ def getIP(file):
     socketIPList = [i for i in socketIPList if i]
     arecordIPList = [i[0] for i in arecordIPList if i]
 
-    result = set(socketIPList+arecordIPList)
+    result = set(socketIPList + arecordIPList)
 
     return list(result)
 
