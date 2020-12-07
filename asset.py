@@ -1,11 +1,21 @@
 import socket
 import dns.resolver
 import ipaddress
+import sys
 
 
 socketIPList = []
 arecordIPList = []
+aliveDomainList = []
 
+
+def checkDomain(host):
+
+    try:
+        socket.gethostbyname(host)
+        return host
+    except:
+        pass
 
 def getSocketIP(host):
 
@@ -31,15 +41,17 @@ def getArecordIP(domain_name):
 
 def getIP(file):
 
-    global socketIPList, arecordIPList
+    global socketIPList, arecordIPList, aliveDomainList
 
     with open(file) as f:
         lines = f.readlines()
         for line in lines:
             line = line.strip()
+            aliveDomainList.append(checkDomain(line))
             socketIPList.append(getSocketIP(line))
             arecordIPList.append(getArecordIP(line))
 
+    aliveDomainList = [i for i in aliveDomainList if i]
     socketIPList = [i for i in socketIPList if i]
     arecordIPList = [i[0] for i in arecordIPList if i]
 
@@ -86,6 +98,10 @@ def getAsset(iplist):
 
 if __name__ == "__main__":
 
-    aliveIP = getIP('targets')
+    fileName = sys.argv[1]
+    aliveIP = getIP(fileName)
     aliveAsset = getAsset(aliveIP)
-    print(aliveAsset)
+    print()
+    print('[*] 可用域名: ' + str(len(aliveDomainList)) + '\n', aliveDomainList, '\n')
+    print('[*] 可用IP: ' + str(len(aliveIP)) + '\n', aliveIP, '\n')
+    print('[*] 资产段: ' + str(len(aliveAsset)) + '\n', aliveAsset)
