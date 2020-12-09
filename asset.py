@@ -2,11 +2,43 @@ import socket
 import dns.resolver
 import ipaddress
 import sys
+import requests
+import json
+import re
+import os
 
 
 socketIPList = []
 arecordIPList = []
 aliveDomainList = []
+
+def crtQuery(host):
+
+    try:
+        domainList = []
+        r = requests.get(f'https://crt.sh/?q={host}', timeout=10)
+        result = r.text
+        crt = re.findall('<tr>(?:\s|\S)*?href="\?id=([0-9]+?)"(?:\s|\S)*?<td>([*_a-zA-Z0-9.-]+?\.' + re.escape(host) + ')</td>(?:\s|\S)*?</tr>', result, re.IGNORECASE)
+        for cert, domains in crt:
+            domain = domains.split('@')[-1]
+            domainList.append(domain)
+        domainList.append(host)
+        return list(set(domainList))
+
+    except:
+        pass
+
+
+def vtSubDomainsQuery(host):
+    r = requests.get(f'https://www.virustotal.com/vtapi/v2/domain/report?apikey=&domain={host}', timeout=10)
+    result = r.text
+    domainList = []
+    result = json.loads(result)
+    if 'subdomains' in result.keys():
+        for line in result['subdomains']:
+            domainList.append(line)
+    domainList.append(host)
+    return domainList
 
 
 def checkDomain(host):
@@ -39,7 +71,7 @@ def getArecordIP(domain_name):
         pass
 
 
-def getIP(file):
+def getIPFromFile(file):
 
     global socketIPList, arecordIPList, aliveDomainList
 
@@ -50,6 +82,25 @@ def getIP(file):
             aliveDomainList.append(checkDomain(line))
             socketIPList.append(getSocketIP(line))
             arecordIPList.append(getArecordIP(line))
+
+    aliveDomainList = [i for i in aliveDomainList if i]
+    socketIPList = [i for i in socketIPList if i]
+    arecordIPList = [i[0] for i in arecordIPList if i]
+
+    result = set(socketIPList + arecordIPList)
+
+    return list(result)
+
+
+def getIP(domains):
+
+    global socketIPList, arecordIPList, aliveDomainList
+
+    for line in domains:
+        # line = line.strip()
+        aliveDomainList.append(checkDomain(line))
+        socketIPList.append(getSocketIP(line))
+        arecordIPList.append(getArecordIP(line))
 
     aliveDomainList = [i for i in aliveDomainList if i]
     socketIPList = [i for i in socketIPList if i]
@@ -98,10 +149,36 @@ def getAsset(iplist):
 
 if __name__ == "__main__":
 
-    fileName = sys.argv[1]
-    aliveIP = getIP(fileName)
+    domain = sys.argv[1]
+    domains = list(set(crtQuery(domain) + vtSubDomainsQuery(domain)))
+
+    aliveIP = getIP(domains)
     aliveAsset = getAsset(aliveIP)
+
+    aliveDomainMsg = '[*] 可用域名: ' + str(len(aliveDomainList)), aliveDomainList
+    aliveIPMsg = '[*] 可用IP: ' + str(len(aliveIP)), aliveIP
+    aliveAssetMsg = '[*] 资产段: ' + str(len(aliveAsset)), aliveAsset
+
+    for x in aliveDomainMsg:
+        print(x)
     print()
-    print('[*] 可用域名: ' + str(len(aliveDomainList)) + '\n', aliveDomainList, '\n')
-    print('[*] 可用IP: ' + str(len(aliveIP)) + '\n', aliveIP, '\n')
-    print('[*] 资产段: ' + str(len(aliveAsset)) + '\n', aliveAsset)
+
+    for x in aliveIPMsg:
+        print(x)
+    print()
+
+    for x in aliveAssetMsg:
+        print(x)
+
+    fileName = sys.argv[1] + '.log'
+
+    if os.path.exists(fileName):
+        os.remove(fileName)
+
+    with open(fileName, 'a+') as f:
+        f.write('\n'.join('%s' % x for x in aliveDomainMsg))
+        f.write('\n\n')
+        f.write('\n'.join('%s' % x for x in aliveIPMsg))
+        f.write('\n\n')
+        f.write('\n'.join('%s' % x for x in aliveAssetMsg))
+
